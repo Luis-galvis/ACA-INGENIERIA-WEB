@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VidaSana — Recomendaciones saludables</title>
+<!-- ================== CONFIGURACIÓN SUPABASE ==================
+     Cambia estas 2 líneas si usas otro proyecto de Supabase.
+     La "anon key" (sb_publishable_...) es pública y segura para el navegador.
+     NUNCA pongas aquí la service_role key ni el JWT secret. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --primary:#1e7a2e; --primary-dark:#14501f; --primary-light:#5cb85c;
+    --primary-soft:#e7f4e8; --accent:#ff8f00; --accent-soft:#fff2dd;
+    --bg:#f4f8f2; --card:#ffffff; --text:#17221a; --muted:#6f7d74;
+    --border:#e3eae1; --shadow:0 10px 30px rgba(20,80,31,.08);
+    --shadow-lg:0 18px 50px rgba(20,80,31,.14);
+    --r:18px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.55}
+  a{color:var(--primary);text-decoration:none}
+  button{font-family:inherit;cursor:pointer;border:none}
+  input,select{font-family:inherit}
+  .container{max-width:1180px;margin:0 auto;padding:0 24px}
+  .muted{color:var(--muted)}
+
+  /* ---------- header ---------- */
+  header{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.86);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+  .nav{display:flex;align-items:center;height:70px;gap:14px}
+  .logo{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:800;color:var(--primary);letter-spacing:-.3px}
+  .logo .leaf{width:30px;height:30px;background:linear-gradient(135deg,var(--primary-light),var(--primary));border-radius:50% 50% 50% 8px;transform:rotate(-45deg);display:inline-block;box-shadow:0 4px 10px rgba(30,122,46,.35)}
+  .nav-links{display:flex;gap:4px;margin-left:auto}
+  .nav-links button{background:none;padding:10px 15px;border-radius:10px;font-size:15px;color:var(--muted);font-weight:600;transition:.15s}
+  .nav-links button.active,.nav-links button:hover{color:var(--primary);background:var(--primary-soft)}
+  .btn{border-radius:12px;padding:11px 20px;font-size:15px;font-weight:700;transition:.15s;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+  .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;box-shadow:0 6px 16px rgba(20,80,31,.28)}
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 20px rgba(20,80,31,.34)}
+  .btn-outline{background:transparent;border:2px solid var(--primary);color:var(--primary)}
+  .btn-outline:hover{background:var(--primary-soft)}
+  .btn-accent{background:var(--accent);color:#fff;box-shadow:0 6px 16px rgba(255,143,0,.3)}
+  .btn-sm{padding:8px 14px;font-size:13px;border-radius:10px}
+  .btn:disabled{opacity:.55;cursor:not-allowed;transform:none!important}
+
+  .userbox{position:relative}
+  .avatar-btn{display:flex;align-items:center;gap:10px;background:var(--primary-soft);border-radius:40px;padding:6px 14px 6px 6px;font-weight:700;color:var(--primary)}
+  .avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--primary-light),var(--primary-dark));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px}
+  .dropdown{position:absolute;right:0;top:52px;background:#fff;border:1px solid var(--border);border-radius:14px;box-shadow:var(--shadow-lg);min-width:200px;padding:8px;display:none;z-index:70}
+  .dropdown.open{display:block}
+  .dropdown button{display:block;width:100%;text-align:left;background:none;padding:10px 12px;border-radius:9px;font-size:14px;color:var(--text)}
+  .dropdown button:hover{background:var(--primary-soft)}
+  .dropdown .name{padding:8px 12px;font-weight:700;color:var(--primary);border-bottom:1px solid var(--border);margin-bottom:4px;font-size:14px}
+
+  .screen{display:none;padding:38px 0 80px}
+  .screen.active{display:block;animation:fade .28s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  h1{font-size:36px;color:var(--primary-dark);letter-spacing:-.5px}
+  h2{font-size:24px;color:var(--primary-dark);margin:34px 0 16px}
+  .sub{color:var(--muted);font-size:16px;max-width:680px}
+
+  .hero{position:relative;display:grid;grid-template-columns:1.1fr .9fr;gap:44px;align-items:center;
+        background:radial-gradient(1200px 400px at 90% -10%,#cdebc9 0%,transparent 60%),linear-gradient(135deg,#eaf6e7,#f4f8f2);
+        border-radius:28px;padding:48px;border:1px solid #e3efe0;overflow:hidden}
+  .hero h1{font-size:46px;line-height:1.1}
+  .hero h1 span{color:var(--accent)}
+  .hero p{margin:18px 0 26px;color:var(--muted);font-size:18px;max-width:520px}
+  .searchbar{display:flex;gap:8px;background:#fff;border-radius:16px;padding:8px;box-shadow:var(--shadow);max-width:560px;border:1px solid var(--border)}
+  .searchbar input{flex:1;border:none;outline:none;padding:10px 14px;font-size:16px;background:transparent}
+  .hero-art{position:relative;height:300px;display:flex;align-items:center;justify-content:center}
+  .hero-ring{width:240px;height:240px;border-radius:50%;background:linear-gradient(135deg,#dff1da,#b8e0b2);position:relative;box-shadow:inset 0 0 0 14px rgba(255,255,255,.6)}
+  .hero-ring .big{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:96px;filter:drop-shadow(0 10px 18px rgba(20,80,31,.25))}
+  .float{position:absolute;background:#fff;border-radius:14px;box-shadow:var(--shadow-lg);padding:10px 16px;font-weight:700;font-size:14px;display:flex;gap:8px;align-items:center}
+  .float.a{top:18px;left:10px}.float.b{bottom:16px;right:0}.float.c{bottom:0;left:26px}
+
+  .grid{display:grid;gap:20px}
+  .cats{grid-template-columns:repeat(4,1fr)}
+  .cat{background:var(--card);border-radius:var(--r);padding:26px 20px;text-align:center;box-shadow:var(--shadow);cursor:pointer;transition:.18s;border:2px solid transparent;position:relative;overflow:hidden}
+  .cat:hover{border-color:var(--primary-light);transform:translateY(-4px);box-shadow:var(--shadow-lg)}
+  .cat .ico{width:62px;height:62px;border-radius:18px;margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;box-shadow:0 8px 18px rgba(0,0,0,.12)}
+  .cat h3{font-size:17px}
+  .cat p{color:var(--muted);font-size:13px;margin-top:2px}
+
+  .cards{grid-template-columns:repeat(3,1fr)}
+  .card{background:var(--card);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);transition:.18s;cursor:pointer;border:1px solid var(--border)}
+  .card:hover{transform:translateY(-4px);box-shadow:var(--shadow-lg)}
+  .card .img{height:150px;display:flex;align-items:center;justify-content:center;font-size:46px;color:#fff;position:relative}
+  .card .img .tag{position:absolute;top:12px;left:12px}
+  .card .img .fav{position:absolute;top:10px;right:10px;width:38px;height:38px;border-radius:50%;background:rgba(255,255,255,.92);display:flex;align-items:center;justify-content:center;font-size:18px;border:none}
+  .card .body{padding:16px}
+  .card h3{font-size:16px;margin-bottom:6px;line-height:1.3}
+  .card .meta{color:var(--muted);font-size:13px;margin-bottom:8px}
+  .tag{display:inline-block;font-size:12px;font-weight:800;color:#fff;border-radius:20px;padding:3px 11px;letter-spacing:.2px}
+  .link{font-weight:700;font-size:14px;color:var(--primary)}
+
+  .filters{display:flex;gap:10px;flex-wrap:wrap;margin:18px 0 8px}
+  .chip{background:#fff;border:1px solid var(--border);border-radius:20px;padding:8px 16px;font-size:14px;font-weight:600;color:var(--muted);transition:.15s}
+  .chip.active{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 4px 12px rgba(30,122,46,.3)}
+  .result{display:grid;grid-template-columns:150px 1fr auto;gap:20px;background:var(--card);border-radius:var(--r);padding:18px;box-shadow:var(--shadow);margin-bottom:16px;align-items:center;cursor:pointer;border:1px solid var(--border);transition:.16s}
+  .result:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+  .result .img{height:120px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:34px;color:#fff}
+  .result h3{font-size:18px;margin-bottom:5px}
+  .result .meta{color:var(--muted);font-size:14px}
+  .stars{color:var(--accent);font-size:17px;letter-spacing:1px}
+  .fav-btn{background:var(--primary-soft);border:none;border-radius:12px;width:50px;height:50px;font-size:21px}
+
+  .detail{display:grid;grid-template-columns:1.25fr .75fr;gap:28px;align-items:start}
+  .detail .main-img{height:340px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:80px;color:#fff;box-shadow:var(--shadow)}
+  .detail h1{font-size:30px;margin-top:16px}
+  .meta-row{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap;align-items:center}
+  .benefits{margin:6px 0 6px 18px}
+  .benefits li{margin:6px 0}
+  .actions{display:flex;gap:12px;margin:22px 0;flex-wrap:wrap}
+  .info-box{background:var(--card);border-radius:var(--r);padding:24px;box-shadow:var(--shadow);border:1px solid var(--border)}
+  .info-box h3{margin-bottom:10px}
+  .info-box table{width:100%;border-collapse:collapse}
+  .info-box td{padding:10px 0;border-bottom:1px solid var(--border);font-size:15px}
+  .info-box td:last-child{text-align:right;font-weight:700}
+
+  .auth{max-width:520px;margin:0 auto;background:var(--card);border-radius:26px;padding:40px;box-shadow:var(--shadow-lg);border:1px solid var(--border)}
+  .auth h1{font-size:27px;text-align:center}
+  .auth .sub{text-align:center;margin-bottom:22px;max-width:none}
+  .tabs{display:grid;grid-template-columns:1fr 1fr;background:#eef3ec;border-radius:14px;padding:6px;margin-bottom:24px}
+  .tabs button{border:none;background:transparent;padding:12px;border-radius:10px;font-size:15px;font-weight:700;color:var(--muted);transition:.15s}
+  .tabs button.active{background:var(--primary);color:#fff;box-shadow:0 4px 12px rgba(30,122,46,.3)}
+  label{font-size:13px;font-weight:700;display:block;margin:14px 0 6px}
+  input,select{width:100%;border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:15px;background:#fbfdfb;outline:none;transition:.15s}
+  input:focus,select:focus{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-soft)}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .auth .btn{width:100%;margin-top:22px}
+  .hint{font-size:12.5px;color:var(--muted);margin-top:14px;text-align:center}
+  .error{color:#c62828;font-size:13px;margin-top:10px;text-align:center;font-weight:600}
+
+  .profile{display:grid;grid-template-columns:330px 1fr;gap:24px;align-items:start}
+  .user-card{background:var(--card);border-radius:var(--r);padding:30px;text-align:center;box-shadow:var(--shadow);border:1px solid var(--border)}
+  .avatar-lg{width:92px;height:92px;border-radius:50%;background:linear-gradient(135deg,var(--primary-light),var(--primary-dark));margin:0 auto 14px;display:flex;align-items:center;justify-content:center;font-size:38px;color:#fff;font-weight:800}
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .metric{background:var(--card);border-radius:16px;padding:20px;box-shadow:var(--shadow);border:1px solid var(--border)}
+  .metric .k{color:var(--muted);font-size:13px;font-weight:700}
+  .metric .v{font-size:24px;font-weight:800;color:var(--primary-dark)}
+  .switch-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border)}
+  .switch{width:56px;height:32px;border-radius:16px;background:#cbd4cb;position:relative;cursor:pointer;transition:.2s;flex-shrink:0}
+  .switch.on{background:var(--primary)}
+  .switch::after{content:'';position:absolute;top:4px;left:4px;width:24px;height:24px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 2px 5px rgba(0,0,0,.2)}
+  .switch.on::after{left:28px}
+
+  .habit{display:flex;align-items:center;gap:20px;padding:18px 0;border-bottom:1px solid var(--border)}
+  .habit:last-child{border-bottom:none}
+  .habit .info{flex:1}
+  .habit .bar{height:12px;border-radius:6px;background:#e8efe7;width:100%;margin-top:8px;overflow:hidden}
+  .habit .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--primary-light),var(--primary));border-radius:6px;transition:width .4s}
+  .check{width:38px;height:38px;border-radius:50%;border:3px solid var(--primary);background:transparent;font-size:18px;color:#fff;transition:.15s;flex-shrink:0}
+  .check.done{background:var(--primary)}
+  .streak{background:linear-gradient(135deg,var(--accent),#ffb300);color:#fff;border-radius:16px;padding:14px 22px;font-weight:800;display:inline-flex;gap:8px;align-items:center;margin-bottom:20px;box-shadow:0 8px 18px rgba(255,143,0,.3)}
+
+  footer{background:var(--primary-dark);color:#cde7d0;padding:38px 0;margin-top:40px}
+  footer .container{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px}
+  footer .brand{color:#fff;font-weight:800;font-size:19px}
+
+  #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(120px);background:#17221a;color:#fff;padding:13px 22px;border-radius:14px;font-size:14px;font-weight:600;box-shadow:var(--shadow-lg);z-index:100;transition:.3s;max-width:90vw;text-align:center}
+  #toast.show{transform:translateX(-50%) translateY(0)}
+  #toast.warn{background:#b45309}#toast.err{background:#b91c1c}#toast.ok{background:#166534}
+
+  #dbnote{background:#fff7e6;border:1px solid #ffe0a3;color:#7a4b00;border-radius:12px;padding:12px 18px;font-size:13.5px;margin:16px 0;display:none}
+  .spinner{width:20px;height:20px;border:3px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(max-width:900px){.cats,.cards,.metrics{grid-template-columns:repeat(2,1fr)}.detail,.profile,.hero{grid-template-columns:1fr}.nav-links{display:none}.hero h1{font-size:34px}}
+  @media(max-width:560px){.cats,.cards,.metrics{grid-template-columns:1fr}.row3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container nav">
+    <div class="logo"><span class="leaf"></span> VidaSana</div>
+    <nav class="nav-links">
+      <button data-screen="inicio" class="active">Inicio</button>
+      <button data-screen="busqueda">Categorías</button>
+      <button data-screen="perfil">Mi salud</button>
+      <button data-screen="favoritos">Favoritos</button>
+    </nav>
+    <div id="authArea" style="margin-left:auto">
+      <button class="btn btn-primary btn-sm" data-screen="auth">Iniciar sesión</button>
+    </div>
+    <div class="userbox" id="userbox" style="display:none">
+      <button class="avatar-btn" onclick="toggleMenu()">
+        <span class="avatar" id="avatarTxt">U</span>
+        <span id="navUserName">Usuario</span>
+      </button>
+      <div class="dropdown" id="dropdown">
+        <div class="name" id="ddName">Usuario</div>
+        <button onclick="show('perfil')">Mi perfil de salud</button>
+        <button onclick="show('favoritos')">Mis favoritos</button>
+        <button onclick="logout()">Cerrar sesión</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ============ INICIO ============ -->
+  <section id="inicio" class="screen active">
+    <div class="hero">
+      <div>
+        <h1>Vive más sano,<br><span>cada día</span></h1>
+        <p>Recomendaciones personalizadas de alimentación, ejercicio, descanso y bienestar, guardadas en tu cuenta para transformar tus hábitos.</p>
+        <div class="searchbar">
+          <input id="heroSearch" type="text" placeholder="¿Qué quieres mejorar hoy?" onkeydown="if(event.key==='Enter')goSearch()">
+          <button class="btn btn-primary" onclick="goSearch()">Buscar</button>
+        </div>
+      </div>
+      <div class="hero-art">
+        <div class="hero-ring"><span class="big">🥗</span></div>
+        <div class="float a">💧 +2 L de agua</div>
+        <div class="float b">🔥 Racha 12 días</div>
+        <div class="float c">❤️ 24 favoritos</div>
+      </div>
+    </div>
+
+    <div id="dbnote">⚠️ <b>Base de datos no conectada.</b> Ejecuta el archivo <code>schema.sql</code> en el SQL Editor de Supabase para activar el registro y el guardado real.</div>
+
+    <h2>Explora por categoría</h2>
+    <div class="grid cats">
+      <div class="cat" onclick="filterByCategory('Alimentación')"><div class="ico" style="background:linear-gradient(135deg,#43a047,#1e7a2e)">🥗</div><h3>Alimentación</h3><p>Recetas y nutrición</p></div>
+      <div class="cat" onclick="filterByCategory('Actividad física')"><div class="ico" style="background:linear-gradient(135deg,#ffa726,#e65100)">🏃</div><h3>Actividad física</h3><p>Rutinas y ejercicio</p></div>
+      <div class="cat" onclick="filterByCategory('Descanso')"><div class="ico" style="background:linear-gradient(135deg,#5c9ce6,#2b5fa8)">😴</div><h3>Descanso</h3><p>Sueño y relajación</p></div>
+      <div class="cat" onclick="filterByCategory('Bienestar')"><div class="ico" style="background:linear-gradient(135deg,#a87bdd,#6b3fa0)">🧘</div><h3>Bienestar</h3><p>Mente y equilibrio</p></div>
+    </div>
+
+    <h2>Recomendaciones destacadas</h2>
+    <div class="grid cards" id="featured"></div>
+  </section>
+
+  <!-- ============ BÚSQUEDA ============ -->
+  <section id="busqueda" class="screen">
+    <h1>Búsqueda y filtrado</h1>
+    <p class="sub">Encuentra recetas, rutinas y hábitos según tus preferencias.</p>
+    <div class="searchbar" style="margin-top:16px">
+      <input id="searchInput" type="text" placeholder="Ej: ensalada, HIIT, meditación…" oninput="renderResults()">
+      <button class="btn btn-primary" onclick="renderResults()">Buscar</button>
+    </div>
+    <div class="filters" id="filters">
+      <button class="chip active" data-cat="Todas" onclick="setCategory('Todas')">Todas</button>
+      <button class="chip" data-cat="Alimentación" onclick="setCategory('Alimentación')">Alimentación</button>
+      <button class="chip" data-cat="Actividad física" onclick="setCategory('Actividad física')">Actividad física</button>
+      <button class="chip" data-cat="Descanso" onclick="setCategory('Descanso')">Descanso</button>
+      <button class="chip" data-cat="Bienestar" onclick="setCategory('Bienestar')">Bienestar</button>
+    </div>
+    <p class="sub" id="count"></p>
+    <div id="results"></div>
+  </section>
+
+  <!-- ============ DETALLE ============ -->
+  <section id="detalle" class="screen">
+    <p class="sub" style="margin-bottom:16px"><a href="#" onclick="show('busqueda');return false">Inicio</a> › <span id="breadcrumb">Detalle</span></p>
+    <div class="detail">
+      <div>
+        <div class="main-img" id="detailImg">🥗</div>
+        <h1 id="detailTitle"></h1>
+        <div class="meta-row"><span class="stars" id="detailStars"></span><span class="muted" id="detailRating" style="font-size:14px"></span></div>
+        <div class="meta-row" id="detailTags"></div>
+        <p class="muted" id="detailDesc"></p>
+        <h2 style="margin:22px 0 6px;font-size:19px">Beneficios</h2>
+        <ul class="benefits" id="detailBenefits"></ul>
+        <div class="actions">
+          <button class="btn btn-primary" id="favDetailBtn" onclick="toggleFav(currentId)">❤️ Guardar en favoritos</button>
+          <button class="btn btn-outline" onclick="this.classList.toggle('btn-primary')">✓ Marcar como completado</button>
+        </div>
+      </div>
+      <div class="info-box">
+        <h3>Información</h3>
+        <table id="nutrition"></table>
+      </div>
+    </div>
+    <h2>Recomendaciones relacionadas</h2>
+    <div class="grid cards" id="related"></div>
+  </section>
+
+  <!-- ============ FAVORITOS / HÁBITOS ============ -->
+  <section id="favoritos" class="screen">
+    <h1>Mis favoritos</h1>
+    <p class="sub">Las recomendaciones que guardaste se sincronizan con tu cuenta.</p>
+    <div class="grid cards" id="favList" style="margin-top:18px"></div>
+
+    <h2>Seguimiento de hábitos</h2>
+    <div class="streak">🔥 Racha actual: <span id="streakDays">12</span> días</div>
+    <div id="habits" style="background:var(--card);border-radius:18px;padding:6px 24px;box-shadow:var(--shadow);border:1px solid var(--border)"></div>
+  </section>
+
+  <!-- ============ PERFIL ============ -->
+  <section id="perfil" class="screen">
+    <h1>Mi perfil de salud</h1>
+    <div id="profileGuest" style="display:none">
+      <p class="sub">Inicia sesión o crea una cuenta para ver y guardar tu perfil de salud.</p>
+      <button class="btn btn-primary" style="margin-top:14px" onclick="show('auth')">Iniciar sesión / Registrarse</button>
+    </div>
+    <div class="profile" id="profileContent" style="margin-top:20px">
+      <div class="user-card">
+        <div class="avatar-lg" id="avatarLg">👤</div>
+        <h3 id="profileName">Usuario</h3>
+        <p class="muted" id="profileEmail" style="text-align:center;word-break:break-all"></p>
+        <p class="muted" id="profileFicha" style="text-align:center;margin-top:2px"></p>
+      </div>
+      <div>
+        <h2 style="margin-top:0">Datos de salud</h2>
+        <div class="grid metrics">
+          <div class="metric"><div class="k">Edad</div><div class="v" id="mAge">—</div></div>
+          <div class="metric"><div class="k">Estatura</div><div class="v" id="mHeight">—</div></div>
+          <div class="metric"><div class="k">Peso</div><div class="v" id="mWeight">—</div></div>
+          <div class="metric"><div class="k">IMC</div><div class="v" id="mImc">—</div></div>
+        </div>
+        <div class="info-box" style="margin-top:20px;background:var(--accent-soft);border-color:#ffe0b3">
+          <b>Objetivo actual:</b> <span id="mGoal">—</span>
+        </div>
+        <h2>Preferencias y restricciones</h2>
+        <div class="info-box">
+          <div class="switch-row"><span>Dieta vegetariana</span><div class="switch" data-pref="Vegetariana" onclick="togglePref(this)"></div></div>
+          <div class="switch-row"><span>Sin gluten</span><div class="switch" data-pref="Sin gluten" onclick="togglePref(this)"></div></div>
+          <div class="switch-row"><span>Baja en azúcar</span><div class="switch" data-pref="Baja en azúcar" onclick="togglePref(this)"></div></div>
+          <div class="switch-row"><span>Alergia a frutos secos</span><div class="switch" data-pref="Frutos secos" onclick="togglePref(this)"></div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;margin-top:18px">
+            <input type="number" id="pfAge" placeholder="Edad">
+            <input type="number" id="pfHeight" placeholder="Estatura cm">
+            <input type="number" id="pfWeight" placeholder="Peso kg">
+            <select id="pfGoal"><option value="">Objetivo…</option><option>Perder peso</option><option>Ganar músculo</option><option>Mejorar energía</option></select>
+          </div>
+          <button class="btn btn-primary" style="margin-top:16px" onclick="saveProfile()">Guardar cambios</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ AUTH ============ -->
+  <section id="auth" class="screen">
+    <div class="auth">
+      <h1 id="authTitle">Crea tu cuenta</h1>
+      <p class="sub" id="authSub">Comienza tu camino hacia una vida más saludable</p>
+      <div class="tabs">
+        <button id="tabReg" class="active" onclick="setTab('reg')">Registrarse</button>
+        <button id="tabLog" onclick="setTab('log')">Iniciar sesión</button>
+      </div>
+      <div id="regForm">
+        <label>Nombre completo</label><input type="text" id="rName" placeholder="Ej: Luis Galvis">
+        <label>Ficha (grupo)</label><input type="text" id="rFicha" placeholder="Ej: 54487">
+        <label>Correo electrónico</label><input type="email" id="rEmail" placeholder="correo@email.com">
+        <label>Contraseña (mínimo 6 caracteres)</label><input type="password" id="rPass" placeholder="••••••••">
+        <div class="row3" style="margin-top:6px">
+          <input type="number" id="rAge" placeholder="Edad">
+          <input type="number" id="rHeight" placeholder="Estatura cm">
+          <input type="number" id="rWeight" placeholder="Peso kg">
+        </div>
+        <label>Objetivo</label>
+        <select id="rGoal"><option value="Perder peso">Perder peso</option><option>Ganar músculo</option><option>Mejorar energía</option></select>
+        <button class="btn btn-primary" id="btnReg" onclick="register()">Crear cuenta</button>
+      </div>
+      <div id="logForm" style="display:none">
+        <label>Correo electrónico</label><input type="email" id="lEmail" placeholder="correo@email.com">
+        <label>Contraseña</label><input type="password" id="lPass" placeholder="••••••••">
+        <button class="btn btn-primary" id="btnLog" onclick="login()">Iniciar sesión</button>
+      </div>
+      <div class="error" id="authError"></div>
+      <p class="hint">Al registrarte aceptas los términos y la política de privacidad. Tus datos están protegidos.</p>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  <div class="container">
+    <div><div class="brand">🌿 VidaSana</div><div>Tu guía para una vida más saludable</div></div>
+    <div>Contacto: hola@vidasana.com<br>© 2026 VidaSana · Privacidad · Términos</div>
+  </div>
+</footer>
+
+<div id="toast"></div>
+
+<script>
+/* ================== SUPABASE ================== */
+const SUPABASE_URL = 'https://bdzumkaoamvirybjkhog.supabase.co';
+const SUPABASE_ANON = 'sb_publishable_O6VcBrX2MsMFtsj0yQysAw_JBHHBM8g';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+/* ================== datos locales (respaldo si la BD no está lista) ================== */
+const LOCAL_RECS = [
+  {id:1,title:"Ensalada mediterránea rica en fibra",cat:"Alimentación",difficulty:"Fácil",duration:"5 min",rating:4.9,emoji:"🥗",color:"#2e7d32",
+   description:"Una combinación fresca de vegetales de temporada, aceite de oliva extra virgen, queso feta y hierbas aromáticas. Ideal para una comida ligera y llena de sabor.",
+   benefits:["Alta en fibra","Fuente de vitaminas A y C","Baja en calorías"],
+   nutrition:[["Calorías","320 kcal"],["Proteínas","9 g"],["Carbohidratos","18 g"],["Grasas","22 g"]]},
+  {id:2,title:"Ensalada César saludable",cat:"Alimentación",difficulty:"Fácil",duration:"10 min",rating:4.7,emoji:"🥬",color:"#63a050",
+   description:"Versión ligera de la clásica ensalada César con aderezo de yogur griego y crutones integrales.",
+   benefits:["Alta en proteínas","Rica en calcio","Saciedad prolongada"],
+   nutrition:[["Calorías","280 kcal"],["Proteínas","14 g"],["Carbohidratos","16 g"],["Grasas","16 g"]]},
+  {id:3,title:"Bowl de quinoa y vegetales",cat:"Alimentación",difficulty:"Media",duration:"15 min",rating:4.8,emoji:"🥙",color:"#f5a028",
+   description:"Bowl completo con quinoa, vegetales asados, aguacate y semillas. Aporta proteína vegetal y grasas saludables.",
+   benefits:["Proteína vegetal","Omega 3","Sin gluten"],
+   nutrition:[["Calorías","410 kcal"],["Proteínas","12 g"],["Carbohidratos","38 g"],["Grasas","20 g"]]},
+  {id:4,title:"Rutina HIIT de 20 minutos",cat:"Actividad física",difficulty:"Alta",duration:"20 min",rating:4.8,emoji:"🏃",color:"#f57c00",
+   description:"Entrenamiento por intervalos de alta intensidad para quemar calorías y mejorar tu resistencia cardiovascular desde casa.",
+   benefits:["Quema de calorías","Mejora cardiovascular","Sin equipamiento"],
+   nutrition:[["Duración","20 min"],["Intensidad","Alta"],["Calorías","~250"],["Nivel","Intermedio"]]},
+  {id:5,title:"Meditación para dormir mejor",cat:"Descanso",difficulty:"Fácil",duration:"10 min",rating:4.9,emoji:"😴",color:"#396eb0",
+   description:"Sesión guiada de respiración y relajación para conciliar el sueño y mejorar la calidad del descanso.",
+   benefits:["Reduce el estrés","Mejora el sueño","Relajación profunda"],
+   nutrition:[["Duración","10 min"],["Momento","Noche"],["Nivel","Principiante"],["Efecto","Relajante"]]},
+  {id:6,title:"Yoga de estiramiento matutino",cat:"Bienestar",difficulty:"Fácil",duration:"15 min",rating:4.7,emoji:"🧘",color:"#7b54b2",
+   description:"Secuencia suave de posturas para despertar el cuerpo, mejorar la flexibilidad y empezar el día con energía.",
+   benefits:["Mejora la flexibilidad","Activa la circulación","Reduce la tensión"],
+   nutrition:[["Duración","15 min"],["Momento","Mañana"],["Nivel","Principiante"],["Enfoque","Flexibilidad"]]},
+];
+const DEFAULT_HABITS = [
+  {name:"Beber 2 litros de agua",target:"6 de 8 vasos",progress:0.75},
+  {name:"Caminar 8.000 pasos",target:"5.240 pasos",progress:0.65},
+  {name:"Dormir 8 horas",target:"7.2 horas",progress:0.90,done:true},
+  {name:"Meditar 10 minutos",target:"4 de 7 días",progress:0.57},
+];
+
+/* ================== estado ================== */
+let user = null;
+let recs = LOCAL_RECS;
+let favIds = new Set();
+let habits = DEFAULT_HABITS;
+let dbReady = false;
+let currentId = null;
+let currentCat = "Todas";
+let profilePrefs = [];
+
+const catColor = c => ({'Alimentación':'#2e7d32','Actividad física':'#f57c00','Descanso':'#396eb0','Bienestar':'#7b54b2'}[c]||'#2e7d32');
+
+/* ================== utilidades ================== */
+let toastTimer;
+function toast(msg, kind='ok'){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + kind;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> t.className = '', 3500);
+}
+function initColor(r){ return r.color || catColor(r.cat); }
+
+/* ================== navegación ================== */
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.nav-links button').forEach(b=>b.classList.toggle('active', b.dataset.screen===id));
+  window.scrollTo({top:0,behavior:'smooth'});
+  if(id==='favoritos') renderFavs();
+  if(id==='busqueda') renderResults();
+  if(id==='perfil') renderProfile();
+}
+document.querySelectorAll('[data-screen]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.screen)));
+
+/* ================== render de tarjetas ================== */
+function cardHTML(r){
+  const col = initColor(r);
+  const fav = favIds.has(r.id);
+  return `<div class="card" onclick="openDetail(${r.id})">
+    <div class="img" style="background:linear-gradient(135deg,${col},${shade(col,-18)})">${r.emoji||'🌿'}
+      <span class="tag" style="background:${col}">${r.cat}</span>
+      <button class="fav" onclick="event.stopPropagation();toggleFav(${r.id})">${fav?'❤️':'🤍'}</button>
+    </div>
+    <div class="body">
+      <h3>${r.title}</h3>
+      <div class="meta">${r.difficulty||'Fácil'} · ${r.duration||''} · ⭐ ${r.rating||'5'}</div>
+      <span class="link">Ver recomendación →</span>
+    </div></div>`;
+}
+function shade(hex, amt){
+  const n = parseInt(hex.replace('#',''),16);
+  const r = Math.max(0,Math.min(255,(n>>16)+amt)), g = Math.max(0,Math.min(255,((n>>8)&0xff)+amt)), b = Math.max(0,Math.min(255,(n&0xff)+amt));
+  return '#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1);
+}
+
+function renderFeatured(){
+  document.getElementById('featured').innerHTML = recs.slice(0,3).map(cardHTML).join('');
+}
+function setCategory(c){ currentCat=c; document.querySelectorAll('#filters .chip').forEach(ch=>ch.classList.toggle('active', ch.dataset.cat===c)); renderResults(); }
+function filterByCategory(c){ currentCat=c; setCategory(c); show('busqueda'); }
+function goSearch(){ const v=document.getElementById('heroSearch').value; document.getElementById('searchInput').value=v; currentCat='Todas'; setCategory('Todas'); show('busqueda'); }
+
+function renderResults(){
+  const q = (document.getElementById('searchInput').value||'').toLowerCase();
+  const list = recs.filter(r=>{
+    const mCat = currentCat==='Todas' || r.cat===currentCat;
+    const mQ = !q || (r.title||'').toLowerCase().includes(q) || (r.cat||'').toLowerCase().includes(q);
+    return mCat && mQ;
+  });
+  document.getElementById('count').textContent = `${list.length} resultado(s) encontrados`;
+  document.getElementById('results').innerHTML = list.map(r=>{
+    const col = initColor(r);
+    return `<div class="result" onclick="openDetail(${r.id})">
+      <div class="img" style="background:linear-gradient(135deg,${col},${shade(col,-18)})">${r.emoji||'🌿'}</div>
+      <div>
+        <span class="tag" style="background:${col}">${r.cat}</span>
+        <h3>${r.title}</h3>
+        <div class="meta">${r.difficulty||'Fácil'} · ${r.duration||''}</div>
+        <div class="stars">${'★'.repeat(Math.round(r.rating||5))} <span style="color:var(--text);font-weight:800">${r.rating||'5'}</span></div>
+      </div>
+      <button class="fav-btn" onclick="event.stopPropagation();toggleFav(${r.id})">${favIds.has(r.id)?'❤️':'🤍'}</button>
+    </div>`;
+  }).join('') || '<p class="sub">Sin resultados.</p>';
+}
+
+function openDetail(id){
+  currentId = id;
+  const r = recs.find(x=>x.id===id); if(!r) return;
+  const col = initColor(r);
+  document.getElementById('breadcrumb').textContent = r.title;
+  document.getElementById('detailImg').style.background = `linear-gradient(135deg,${col},${shade(col,-18)})`;
+  document.getElementById('detailImg').textContent = r.emoji||'🌿';
+  document.getElementById('detailTitle').textContent = r.title;
+  document.getElementById('detailStars').textContent = '★'.repeat(Math.round(r.rating||5));
+  document.getElementById('detailRating').textContent = `${r.rating||'5'} (128 valoraciones)`;
+  document.getElementById('detailTags').innerHTML = `<span class="tag" style="background:${col}">${r.cat}</span><span class="tag" style="background:#ff8f00">${r.difficulty||'Fácil'} · ${r.duration||''}</span>`;
+  document.getElementById('detailDesc').textContent = r.description||'';
+  document.getElementById('detailBenefits').innerHTML = (r.benefits||[]).map(b=>`<li>${b}</li>`).join('');
+  const nut = Array.isArray(r.nutrition) ? r.nutrition : (r.nutrition ? Object.entries(r.nutrition) : []);
+  document.getElementById('nutrition').innerHTML = nut.map(([k,v])=>`<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  document.getElementById('related').innerHTML = recs.filter(x=>x.cat===r.cat && x.id!==id).slice(0,3).map(cardHTML).join('');
+  updateFavBtn();
+  show('detalle');
+}
+function updateFavBtn(){
+  const b = document.getElementById('favDetailBtn');
+  if(!currentId){ return; }
+  const fav = favIds.has(currentId);
+  b.innerHTML = fav ? '❤️ Quitar de favoritos' : '🤍 Guardar en favoritos';
+  b.classList.toggle('btn-accent', fav);
+}
+
+/* ================== autenticación ================== */
+function setTab(t){
+  document.getElementById('tabReg').classList.toggle('active', t==='reg');
+  document.getElementById('tabLog').classList.toggle('active', t==='log');
+  document.getElementById('regForm').style.display = t==='reg'?'block':'none';
+  document.getElementById('logForm').style.display = t==='log'?'block':'none';
+  document.getElementById('authTitle').textContent = t==='reg' ? 'Crea tu cuenta' : 'Bienvenido de nuevo';
+  document.getElementById('authSub').textContent = t==='reg' ? 'Comienza tu camino hacia una vida más saludable' : 'Inicia sesión para ver tus datos';
+  document.getElementById('authError').textContent='';
+}
+
+async function register(){
+  const name = document.getElementById('rName').value.trim();
+  const ficha = document.getElementById('rFicha').value.trim();
+  const email = document.getElementById('rEmail').value.trim();
+  const pass = document.getElementById('rPass').value;
+  const err = document.getElementById('authError');
+  err.textContent='';
+  if(!name || !email || pass.length < 6){ err.textContent='Completa nombre, correo y una contraseña de al menos 6 caracteres.'; return; }
+
+  const btn = document.getElementById('btnReg');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creando cuenta…';
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options:{ data:{ full_name:name, ficha } } });
+  btn.disabled = false; btn.innerHTML = 'Crear cuenta';
+
+  if(error){ err.textContent = error.message; return; }
+
+  if(data.session){
+    await saveProfileOnSignup(name, ficha, email);
+    toast('✅ Cuenta creada. ¡Bienvenido a VidaSana!','ok');
+    show('inicio');
+  } else {
+    toast('📧 Revisa tu correo para confirmar la cuenta y luego inicia sesión.','warn');
+    setTab('log');
+  }
+}
+
+async function saveProfileOnSignup(name, ficha, email){
+  const age = +document.getElementById('rAge').value || null;
+  const height = +document.getElementById('rHeight').value || null;
+  const weight = +document.getElementById('rWeight').value || null;
+  const goal = document.getElementById('rGoal').value;
+  const uid = (await sb.auth.getUser()).data.user.id;
+  await sb.from('profiles').upsert({ id: uid, full_name:name, ficha, email, age, height, weight, goal }, { onConflict:'id' });
+}
+
+async function login(){
+  const email = document.getElementById('lEmail').value.trim();
+  const pass = document.getElementById('lPass').value;
+  const err = document.getElementById('authError');
+  err.textContent='';
+  if(!email || !pass){ err.textContent='Ingresa tu correo y contraseña.'; return; }
+  const btn = document.getElementById('btnLog');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Entrando…';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  btn.disabled = false; btn.innerHTML = 'Iniciar sesión';
+  if(error){ err.textContent = error.message; return; }
+  toast('✅ Sesión iniciada.','ok');
+  show('inicio');
+}
+
+async function logout(){
+  await sb.auth.signOut();
+  toast('Sesión cerrada.','ok');
+}
+
+function toggleMenu(){ document.getElementById('dropdown').classList.toggle('open'); }
+document.addEventListener('click', e=>{ if(!e.target.closest('.userbox')) document.getElementById('dropdown').classList.remove('open'); });
+
+function updateNav(){
+  const authArea = document.getElementById('authArea');
+  const userbox = document.getElementById('userbox');
+  if(user){
+    authArea.style.display='none'; userbox.style.display='block';
+    const name = (user.user_metadata && user.user_metadata.full_name) || user.email;
+    document.getElementById('navUserName').textContent = name.split(' ')[0] || 'Usuario';
+    document.getElementById('ddName').textContent = name;
+    document.getElementById('avatarTxt').textContent = (name[0]||'U').toUpperCase();
+  } else {
+    authArea.style.display='block'; userbox.style.display='none';
+  }
+}
+
+/* ================== favoritos (BD) ================== */
+async function loadFavorites(){
+  favIds = new Set();
+  if(!user){ return; }
+  const { data, error } = await sb.from('favorites').select('rec_id').eq('user_id', user.id);
+  if(!error && data){ data.forEach(f=>favIds.add(f.rec_id)); }
+}
+async function toggleFav(id){
+  if(!user){ toast('🔒 Inicia sesión para guardar favoritos.','warn'); show('auth'); return; }
+  if(favIds.has(id)){
+    favIds.delete(id);
+    await sb.from('favorites').delete().eq('user_id', user.id).eq('rec_id', id);
+    toast('Quitado de favoritos.','ok');
+  } else {
+    favIds.add(id);
+    await sb.from('favorites').insert({ user_id: user.id, rec_id: id });
+    toast('❤️ Guardado en favoritos.','ok');
+  }
+  renderFavs(); renderFeatured(); renderResults(); updateFavBtn();
+}
+async function renderFavs(){
+  const el = document.getElementById('favList');
+  if(!user){ el.innerHTML = '<p class="sub">Inicia sesión para ver tus favoritos.</p>'; return; }
+  await loadFavorites();
+  const list = recs.filter(r=>favIds.has(r.id));
+  el.innerHTML = list.length ? list.map(cardHTML).join('') : '<p class="sub">Aún no has guardado favoritos.</p>';
+}
+
+/* ================== hábitos (BD) ================== */
+async function loadHabits(){
+  habits = DEFAULT_HABITS.map(h=>({...h}));
+  if(!user){ renderHabits(); return; }
+  const { data, error } = await sb.from('habits').select('*').eq('user_id', user.id).order('id');
+  if(!error && data && data.length){ habits = data.map(h=>({name:h.name, target:h.target, progress:+h.progress, done:h.done, dbid:h.id})); }
+  else if(!error && data && data.length===0){ await seedHabits(); }
+  renderHabits();
+}
+async function seedHabits(){
+  const rows = DEFAULT_HABITS.map(h=>({ user_id:user.id, name:h.name, target:h.target, progress:h.progress, done:!!h.done }));
+  await sb.from('habits').insert(rows);
+  habits = DEFAULT_HABITS.map(h=>({...h}));
+}
+function renderHabits(){
+  const days = Math.min(99, habits.filter(h=>h.done).length*3 + 6);
+  document.getElementById('streakDays').textContent = days;
+  document.getElementById('habits').innerHTML = habits.map((h,i)=>`
+    <div class="habit">
+      <div class="info"><b>${h.name}</b><div class="muted" style="font-size:13px">${h.target}</div>
+        <div class="bar"><i style="width:${Math.round(h.progress*100)}%"></i></div>
+      </div>
+      <button class="check ${h.done?'done':''}" onclick="toggleHabit(${i})">✓</button>
+    </div>`).join('');
+}
+async function toggleHabit(i){
+  const h = habits[i];
+  h.done = !h.done;
+  h.progress = h.done ? Math.max(h.progress, 1) : Math.min(h.progress, .9);
+  renderHabits();
+  if(user){
+    const payload = { name:h.name, target:h.target, progress:h.progress, done:h.done };
+    if(h.dbid){ await sb.from('habits').update(payload).eq('id', h.dbid).eq('user_id', user.id); }
+    else { await sb.from('habits').upsert({ ...payload, user_id:user.id }, { onConflict:'user_id,name' }); }
+  }
+}
+
+/* ================== perfil (BD) ================== */
+function togglePref(el){ el.classList.toggle('on'); }
+async function renderProfile(){
+  const guest = document.getElementById('profileGuest');
+  const content = document.getElementById('profileContent');
+  if(!user){ guest.style.display='block'; content.style.display='none'; return; }
+  guest.style.display='none'; content.style.display='grid';
+  const name = (user.user_metadata && user.user_metadata.full_name) || user.email.split('@')[0];
+  document.getElementById('profileName').textContent = name;
+  document.getElementById('profileEmail').textContent = user.email;
+  document.getElementById('avatarLg').textContent = (name[0]||'U').toUpperCase();
+  const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  const p = data || {};
+  document.getElementById('profileFicha').textContent = p.ficha ? 'Ficha '+p.ficha : '';
+  document.getElementById('mAge').textContent = p.age ? p.age+' años' : '—';
+  document.getElementById('mHeight').textContent = p.height ? p.height+' cm' : '—';
+  document.getElementById('mWeight').textContent = p.weight ? p.weight+' kg' : '—';
+  const imc = (p.height && p.weight) ? (p.weight/((p.height/100)**2)).toFixed(1) : null;
+  document.getElementById('mImc').textContent = imc ? imc+' · '+imcLabel(+imc) : '—';
+  document.getElementById('mGoal').textContent = p.goal || '—';
+  profilePrefs = Array.isArray(p.preferences) ? p.preferences : [];
+  document.querySelectorAll('.switch[data-pref]').forEach(sw=>{
+    sw.classList.toggle('on', profilePrefs.includes(sw.dataset.pref));
+  });
+  document.getElementById('pfAge').value = p.age||''; document.getElementById('pfHeight').value = p.height||'';
+  document.getElementById('pfWeight').value = p.weight||''; document.getElementById('pfGoal').value = p.goal||'';
+}
+function imcLabel(imc){ return imc<18.5?'Bajo peso': imc<25?'Saludable': imc<30?'Sobrepeso':'Obesidad'; }
+async function saveProfile(){
+  if(!user){ toast('Inicia sesión primero.','warn'); return; }
+  profilePrefs = [...document.querySelectorAll('.switch[data-pref].on')].map(s=>s.dataset.pref);
+  const payload = {
+    id: user.id,
+    full_name: (user.user_metadata && user.user_metadata.full_name) || user.email.split('@')[0],
+    email: user.email,
+    age: +document.getElementById('pfAge').value || null,
+    height: +document.getElementById('pfHeight').value || null,
+    weight: +document.getElementById('pfWeight').value || null,
+    goal: document.getElementById('pfGoal').value || null,
+    preferences: profilePrefs,
+  };
+  const { error } = await sb.from('profiles').upsert(payload, { onConflict:'id' });
+  if(error){ toast('Error guardando: '+error.message,'err'); return; }
+  toast('✅ Perfil guardado correctamente.','ok');
+  renderProfile();
+}
+
+/* ================== carga inicial ================== */
+async function loadRecommendations(){
+  const { data, error } = await sb.from('recommendations').select('*').order('id');
+  if(!error && data && data.length){ recs = data.map(r=>({ ...r, cat: r.category, benefits: r.benefits||[], nutrition: r.nutrition||[] })); dbReady = true; }
+  else {
+    dbReady = false;
+    document.getElementById('dbnote').style.display = 'block';
+  }
+}
+async function init(){
+  const { data } = await sb.auth.getSession();
+  user = data && data.session ? data.session.user : null;
+  await loadRecommendations();
+  updateNav();
+  renderFeatured();
+  if(user){ await loadFavorites(); await loadHabits(); }
+  renderHabits();
+}
+sb.auth.onAuthStateChange((event, session)=>{
+  user = session ? session.user : null;
+  updateNav();
+  if(user){ loadFavorites(); loadHabits(); renderProfile(); }
+  else { favIds = new Set(); habits = DEFAULT_HABITS.map(h=>({...h})); renderHabits(); }
+});
+init();
+</script>
+</body>
+</html>
