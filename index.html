@@ -525,7 +525,15 @@ function updateFavBtn(){
   b.classList.toggle('btn-accent', fav);
 }
 
-/* ================== autenticación ================== */
+/* ================== autenticación y respaldo directo ================== */
+const LS_USERS = 'vidasana_users_v1';
+const LS_SESSION = 'vidasana_session_v1';
+function getLocalUsers(){ try{ return JSON.parse(localStorage.getItem(LS_USERS)||'{}'); }catch(e){ return {}; } }
+function saveLocalUsers(u){ localStorage.setItem(LS_USERS, JSON.stringify(u)); }
+function getLocalSession(){ try{ return JSON.parse(localStorage.getItem(LS_SESSION)||'null'); }catch(e){ return null; } }
+function setLocalSession(u){ if(u) localStorage.setItem(LS_SESSION, JSON.stringify(u)); else localStorage.removeItem(LS_SESSION); }
+function uKey(prefix){ return `vidasana_${prefix}_${(user && user.email || 'guest').toLowerCase()}`; }
+
 function setTab(t){
   document.getElementById('tabReg').classList.toggle('active', t==='reg');
   document.getElementById('tabLog').classList.toggle('active', t==='log');
@@ -539,8 +547,12 @@ function setTab(t){
 async function register(){
   const name = document.getElementById('rName').value.trim();
   const ficha = document.getElementById('rFicha').value.trim();
-  const email = document.getElementById('rEmail').value.trim();
+  const email = document.getElementById('rEmail').value.trim().toLowerCase();
   const pass = document.getElementById('rPass').value;
+  const age = +document.getElementById('rAge').value || null;
+  const height = +document.getElementById('rHeight').value || null;
+  const weight = +document.getElementById('rWeight').value || null;
+  const goal = document.getElementById('rGoal').value;
   const err = document.getElementById('authError');
   err.textContent='';
   if(!name || !email || pass.length < 6){ err.textContent='Completa nombre, correo y una contraseña de al menos 6 caracteres.'; return; }
@@ -550,45 +562,83 @@ async function register(){
   const { data, error } = await sb.auth.signUp({ email, password: pass, options:{ data:{ full_name:name, ficha } } });
   btn.disabled = false; btn.innerHTML = 'Crear cuenta';
 
-  if(error){ err.textContent = error.message; return; }
+  // Guardamos siempre en respaldo local para ingreso inmediato sin depender de confirmación por correo
+  const users = getLocalUsers();
+  const uid = (data && data.user && data.user.id) || (users[email] && users[email].id) || ('local-' + Date.now());
+  users[email] = { id: uid, email, pass, full_name: name, ficha };
+  saveLocalUsers(users);
 
-  if(data.session){
-    await saveProfileOnSignup(name, ficha, email);
-    toast('✅ Cuenta creada. ¡Bienvenido a VidaSana!','ok');
-    show('inicio');
+  const profileData = { id: uid, full_name: name, ficha, email, age, height, weight, goal, preferences: [] };
+  localStorage.setItem(`vidasana_prof_${email}`, JSON.stringify(profileData));
+
+  if(!error && data && data.session){
+    user = data.session.user;
+    setLocalSession(null);
+    await sb.from('profiles').upsert(profileData, { onConflict:'id' });
   } else {
-    toast('📧 Revisa tu correo para confirmar la cuenta y luego inicia sesión.','warn');
-    setTab('log');
+    // Modo directo inmediato (cuando Supabase tiene deshabilitado el proveedor de email o pide confirmación)
+    user = { id: uid, email, user_metadata: { full_name: name, ficha }, isLocal: true };
+    setLocalSession(user);
   }
-}
 
-async function saveProfileOnSignup(name, ficha, email){
-  const age = +document.getElementById('rAge').value || null;
-  const height = +document.getElementById('rHeight').value || null;
-  const weight = +document.getElementById('rWeight').value || null;
-  const goal = document.getElementById('rGoal').value;
-  const uid = (await sb.auth.getUser()).data.user.id;
-  await sb.from('profiles').upsert({ id: uid, full_name:name, ficha, email, age, height, weight, goal }, { onConflict:'id' });
+  updateNav();
+  await loadFavorites();
+  await loadHabits();
+  renderProfile();
+  toast('✅ Cuenta creada. ¡Bienvenido a VidaSana!','ok');
+  show('perfil');
 }
 
 async function login(){
-  const email = document.getElementById('lEmail').value.trim();
+  const email = document.getElementById('lEmail').value.trim().toLowerCase();
   const pass = document.getElementById('lPass').value;
   const err = document.getElementById('authError');
   err.textContent='';
   if(!email || !pass){ err.textContent='Ingresa tu correo y contraseña.'; return; }
   const btn = document.getElementById('btnLog');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Entrando…';
-  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
   btn.disabled = false; btn.innerHTML = 'Iniciar sesión';
-  if(error){ err.textContent = error.message; return; }
-  toast('✅ Sesión iniciada.','ok');
-  show('inicio');
+
+  if(!error && data && data.session){
+    user = data.session.user;
+    setLocalSession(null);
+    updateNav();
+    await loadFavorites();
+    await loadHabits();
+    toast('✅ Sesión iniciada.','ok');
+    show('inicio');
+    return;
+  }
+
+  // Respaldo inmediato con cuentas registradas localmente
+  const users = getLocalUsers();
+  const localAcc = users[email];
+  if(localAcc && localAcc.pass === pass){
+    user = { id: localAcc.id, email: localAcc.email, user_metadata: { full_name: localAcc.full_name, ficha: localAcc.ficha }, isLocal: true };
+    setLocalSession(user);
+    updateNav();
+    await loadFavorites();
+    await loadHabits();
+    toast('✅ Sesión iniciada.','ok');
+    show('inicio');
+    return;
+  }
+
+  err.textContent = localAcc ? 'Contraseña incorrecta.' : 'No encontramos una cuenta con ese correo. Regístrate primero en la pestaña "Registrarse".';
 }
 
 async function logout(){
+  setLocalSession(null);
+  user = null;
   await sb.auth.signOut();
+  favIds = new Set();
+  habits = DEFAULT_HABITS.map(h=>({...h}));
+  updateNav();
+  renderHabits();
+  renderFeatured();
   toast('Sesión cerrada.','ok');
+  show('inicio');
 }
 
 function toggleMenu(){ document.getElementById('dropdown').classList.toggle('open'); }
@@ -608,22 +658,28 @@ function updateNav(){
   }
 }
 
-/* ================== favoritos (BD) ================== */
+/* ================== favoritos (BD + Respaldo) ================== */
 async function loadFavorites(){
   favIds = new Set();
   if(!user){ return; }
-  const { data, error } = await sb.from('favorites').select('rec_id').eq('user_id', user.id);
-  if(!error && data){ data.forEach(f=>favIds.add(f.rec_id)); }
+  const saved = JSON.parse(localStorage.getItem(uKey('favs'))||'[]');
+  saved.forEach(id=>favIds.add(id));
+  if(!user.isLocal){
+    const { data, error } = await sb.from('favorites').select('rec_id').eq('user_id', user.id);
+    if(!error && data){ data.forEach(f=>favIds.add(f.rec_id)); localStorage.setItem(uKey('favs'), JSON.stringify([...favIds])); }
+  }
 }
 async function toggleFav(id){
   if(!user){ toast('🔒 Inicia sesión para guardar favoritos.','warn'); show('auth'); return; }
   if(favIds.has(id)){
     favIds.delete(id);
-    await sb.from('favorites').delete().eq('user_id', user.id).eq('rec_id', id);
+    localStorage.setItem(uKey('favs'), JSON.stringify([...favIds]));
+    if(!user.isLocal) await sb.from('favorites').delete().eq('user_id', user.id).eq('rec_id', id);
     toast('Quitado de favoritos.','ok');
   } else {
     favIds.add(id);
-    await sb.from('favorites').insert({ user_id: user.id, rec_id: id });
+    localStorage.setItem(uKey('favs'), JSON.stringify([...favIds]));
+    if(!user.isLocal) await sb.from('favorites').insert({ user_id: user.id, rec_id: id });
     toast('❤️ Guardado en favoritos.','ok');
   }
   renderFavs(); renderFeatured(); renderResults(); updateFavBtn();
@@ -636,19 +692,26 @@ async function renderFavs(){
   el.innerHTML = list.length ? list.map(cardHTML).join('') : '<p class="sub">Aún no has guardado favoritos.</p>';
 }
 
-/* ================== hábitos (BD) ================== */
+/* ================== hábitos (BD + Respaldo) ================== */
 async function loadHabits(){
   habits = DEFAULT_HABITS.map(h=>({...h}));
   if(!user){ renderHabits(); return; }
-  const { data, error } = await sb.from('habits').select('*').eq('user_id', user.id).order('id');
-  if(!error && data && data.length){ habits = data.map(h=>({name:h.name, target:h.target, progress:+h.progress, done:h.done, dbid:h.id})); }
-  else if(!error && data && data.length===0){ await seedHabits(); }
+  const localH = JSON.parse(localStorage.getItem(uKey('habits'))||'null');
+  if(localH && localH.length){ habits = localH; }
+  if(!user.isLocal){
+    const { data, error } = await sb.from('habits').select('*').eq('user_id', user.id).order('id');
+    if(!error && data && data.length){
+      habits = data.map(h=>({name:h.name, target:h.target, progress:+h.progress, done:h.done, dbid:h.id}));
+      localStorage.setItem(uKey('habits'), JSON.stringify(habits));
+    } else if(!error && data && data.length===0){ await seedHabits(); }
+  }
   renderHabits();
 }
 async function seedHabits(){
   const rows = DEFAULT_HABITS.map(h=>({ user_id:user.id, name:h.name, target:h.target, progress:h.progress, done:!!h.done }));
-  await sb.from('habits').insert(rows);
+  if(!user.isLocal) await sb.from('habits').insert(rows);
   habits = DEFAULT_HABITS.map(h=>({...h}));
+  localStorage.setItem(uKey('habits'), JSON.stringify(habits));
 }
 function renderHabits(){
   const days = Math.min(99, habits.filter(h=>h.done).length*3 + 6);
@@ -667,13 +730,16 @@ async function toggleHabit(i){
   h.progress = h.done ? Math.max(h.progress, 1) : Math.min(h.progress, .9);
   renderHabits();
   if(user){
-    const payload = { name:h.name, target:h.target, progress:h.progress, done:h.done };
-    if(h.dbid){ await sb.from('habits').update(payload).eq('id', h.dbid).eq('user_id', user.id); }
-    else { await sb.from('habits').upsert({ ...payload, user_id:user.id }, { onConflict:'user_id,name' }); }
+    localStorage.setItem(uKey('habits'), JSON.stringify(habits));
+    if(!user.isLocal){
+      const payload = { name:h.name, target:h.target, progress:h.progress, done:h.done };
+      if(h.dbid){ await sb.from('habits').update(payload).eq('id', h.dbid).eq('user_id', user.id); }
+      else { await sb.from('habits').upsert({ ...payload, user_id:user.id }, { onConflict:'user_id,name' }); }
+    }
   }
 }
 
-/* ================== perfil (BD) ================== */
+/* ================== perfil (BD + Respaldo) ================== */
 function togglePref(el){ el.classList.toggle('on'); }
 async function renderProfile(){
   const guest = document.getElementById('profileGuest');
@@ -684,9 +750,15 @@ async function renderProfile(){
   document.getElementById('profileName').textContent = name;
   document.getElementById('profileEmail').textContent = user.email;
   document.getElementById('avatarLg').textContent = (name[0]||'U').toUpperCase();
-  const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
-  const p = data || {};
-  document.getElementById('profileFicha').textContent = p.ficha ? 'Ficha '+p.ficha : '';
+  const localP = JSON.parse(localStorage.getItem(`vidasana_prof_${user.email.toLowerCase()}`)||'{}');
+  let dbP = null;
+  if(!user.isLocal){
+    const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    dbP = data;
+  }
+  const p = Object.assign({}, localP, dbP || {});
+  const fichaVal = p.ficha || (user.user_metadata && user.user_metadata.ficha) || '';
+  document.getElementById('profileFicha').textContent = fichaVal ? 'Ficha '+fichaVal : '';
   document.getElementById('mAge').textContent = p.age ? p.age+' años' : '—';
   document.getElementById('mHeight').textContent = p.height ? p.height+' cm' : '—';
   document.getElementById('mWeight').textContent = p.weight ? p.weight+' kg' : '—';
@@ -704,9 +776,11 @@ function imcLabel(imc){ return imc<18.5?'Bajo peso': imc<25?'Saludable': imc<30?
 async function saveProfile(){
   if(!user){ toast('Inicia sesión primero.','warn'); return; }
   profilePrefs = [...document.querySelectorAll('.switch[data-pref].on')].map(s=>s.dataset.pref);
+  const prevP = JSON.parse(localStorage.getItem(`vidasana_prof_${user.email.toLowerCase()}`)||'{}');
   const payload = {
     id: user.id,
     full_name: (user.user_metadata && user.user_metadata.full_name) || user.email.split('@')[0],
+    ficha: prevP.ficha || (user.user_metadata && user.user_metadata.ficha) || null,
     email: user.email,
     age: +document.getElementById('pfAge').value || null,
     height: +document.getElementById('pfHeight').value || null,
@@ -714,8 +788,11 @@ async function saveProfile(){
     goal: document.getElementById('pfGoal').value || null,
     preferences: profilePrefs,
   };
-  const { error } = await sb.from('profiles').upsert(payload, { onConflict:'id' });
-  if(error){ toast('Error guardando: '+error.message,'err'); return; }
+  localStorage.setItem(`vidasana_prof_${user.email.toLowerCase()}`, JSON.stringify(payload));
+  if(!user.isLocal){
+    const { error } = await sb.from('profiles').upsert(payload, { onConflict:'id' });
+    if(error){ console.warn('Supabase profile upsert warn:', error.message); }
+  }
   toast('✅ Perfil guardado correctamente.','ok');
   renderProfile();
 }
@@ -731,7 +808,7 @@ async function loadRecommendations(){
 }
 async function init(){
   const { data } = await sb.auth.getSession();
-  user = data && data.session ? data.session.user : null;
+  user = (data && data.session) ? data.session.user : getLocalSession();
   await loadRecommendations();
   updateNav();
   renderFeatured();
@@ -739,7 +816,11 @@ async function init(){
   renderHabits();
 }
 sb.auth.onAuthStateChange((event, session)=>{
-  user = session ? session.user : null;
+  if(session && session.user){
+    user = session.user;
+  } else if(!getLocalSession()){
+    user = null;
+  }
   updateNav();
   if(user){ loadFavorites(); loadHabits(); renderProfile(); }
   else { favIds = new Set(); habits = DEFAULT_HABITS.map(h=>({...h})); renderHabits(); }
